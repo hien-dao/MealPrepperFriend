@@ -56,7 +56,7 @@ The platform combines a modern React/Next.js frontend, a robust Spring Boot back
 - Machine learning / LLM‑powered recipe and meal‑plan generation  
 
 ### **Database**  
-- PostgreSQL
+- MySQL
 
 ### **Integrations**
 - Google Calendar / Apple Calendar  
