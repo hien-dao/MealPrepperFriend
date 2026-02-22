@@ -44,8 +44,7 @@ The platform combines a modern React/Next.js frontend, a robust Spring Boot back
 ## 🛠️ Tech Stack
 
 ### **Frontend**
-- React  
-- Next.js  
+- Vue.js
 
 ### **Backend**
 - Java  
