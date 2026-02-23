@@ -83,7 +83,9 @@ public class User {
         this.email = email;
     }
 
-    // Note: The password should be hashed before being set
+    public String getPassword() {
+        return password;
+    }
     public void setPassword(String password) {
         this.password = password;
     }
