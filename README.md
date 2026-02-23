@@ -4,7 +4,7 @@ MealPrepperFriend is an AI‑powered meal‑planning and meal‑prepping web app
 
 ## 🚀 Overview
 
-The platform combines a modern React/Next.js frontend, a robust Spring Boot backend, and a Python‑based AI engine to deliver a seamless and intelligent meal‑prep experience. Users can explore recipes, track macros, generate shopping lists, and stay organized with calendar integrations.
+The platform combines a modern Vue.js frontend, a robust Spring Boot backend, and a Python‑based AI engine to deliver a seamless and intelligent meal‑prep experience. Users can explore recipes, track macros, generate shopping lists, and stay organized with calendar integrations.
 
 ## ✨ Key Features
 
