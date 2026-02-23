@@ -2,9 +2,33 @@
 
 MealPrepperFriend is an AI‑powered meal‑planning and meal‑prepping web application designed to help users plan their meals for an entire week. It generates personalized meal plans based on dietary preferences, fitness goals, and available ingredients, while also simplifying grocery shopping and nutrition tracking.
 
-## 🚀 Overview
+## 🏃 How to Run the Project (Without Using an IDE)
+### 1. Requirements
+- Java 21+
+- Maven Wrapper (included in `/backend`)
+- Node.js 18+
+- npm (comes with Node)
+- MySQL 8+ (local installation **or** AWS RDS MySQL instance)
+### 2. Database Setup
+- Update credentials in `/backend/src/main/resources/application.yml`
+- Create the database:
+   ```sql
+   CREATE DATABASE mealprepperfriend;
+   ```
+### 3. Run the Project
+- Backend will start at `http://localhost:8080`
+  ```
+  cd backend
+  ./mvnw spring-boot:run
+  ```
+- Frontend will start at `http://localhost:5173`
+  ```
+  cd frontend
+  npm install
+  npm run dev
+  ```
 
-The platform combines a modern Vue.js frontend, a robust Spring Boot backend, and a Python‑based AI engine to deliver a seamless and intelligent meal‑prep experience. Users can explore recipes, track macros, generate shopping lists, and stay organized with calendar integrations.
+
 
 ## ✨ Key Features
 
