@@ -2,77 +2,145 @@
 
 MealPrepperFriend is an AI‑powered meal‑planning and meal‑prepping web application designed to help users plan their meals for an entire week. It generates personalized meal plans based on dietary preferences, fitness goals, and available ingredients, while also simplifying grocery shopping and nutrition tracking.
 
-## 🏃 How to Run the Project (Without Using an IDE)
-### 1. Requirements
-- Java 21+
-- Maven Wrapper (included in `/backend`)
-- Node.js 18+
-- npm (comes with Node)
-- MySQL 8+ (local installation **or** AWS RDS MySQL instance)
-### 2. Database Setup
-- Update credentials in `/backend/src/main/resources/application.yml`
-- Create the database:
-   ```sql
-   CREATE DATABASE mealprepperfriend;
-   ```
-### 3. Run the Project
-- Backend will start at `http://localhost:8080`
-  ```
-  cd backend
-  ./mvnw spring-boot:run
-  ```
-- Frontend will start at `http://localhost:5173`
-  ```
-  cd frontend
-  npm install
-  npm run dev
-  ```
+## Live Demo
+
+**Project URL:** [nutrition.anuj.io](http://nutrition.anuj.io)
+
+## How to Use the App
+
+### 1. Register
+Go to the site and create a new account.
+
+### 2. Log In
+Use your email and password to access your dashboard.
+
+### 3. Set Your Goals
+On the dashboard, fill in your body stats and fitness goal:
+- age
+- sex
+- height
+- current weight
+- target weight
+- activity level
+- goal type
+
+After submission, the app calculates your recommended calories and macros.
+
+### 4. Log Meals
+Go to the **Meals** page and:
+- search for a food item
+- choose a result from the dropdown
+- review the nutrition preview
+- enter the amount eaten in grams
+- choose meal type
+- save the meal
+
+### 5. View Daily Totals
+Your meals page and dashboard show your daily calories and macro totals so you can keep track of progress.
+
+### 6. Update Goals Anytime
+You can return to the dashboard later and update your fitness or nutrition goals whenever needed.
+
+
 
 
 
 ## ✨ Key Features
 
-- **AI Chatbot Ingredient Input**  
-  Enter ingredients you already have and receive instant recipe suggestions.
+At its current stage, the application includes:
 
-- **Calories & Macros Calculator**  
-  Personalized nutrition breakdowns based on fitness and health goals.
+- user registration and login
+- password reset flow
+- dashboard with calorie and macro information
+- health and fitness goal calculation
+- meal logging
+- USDA food search and nutrition lookup
+- deployed production version on AWS EC2
 
-- **Smart Recipe Suggestions**  
-  Categorized recipes, favourites, weekly plan editing, and goal‑based recommendations.
+## Current Features
 
-- **Calendar Integration**  
-  Sync meal plans with Google or Apple Calendar.
+### User Authentication
+Users can:
+- create an account
+- log in and log out
+- reset their password if needed
 
-- **Auto‑Generated Shopping List**  
-  Create a complete shopping list for the week.
+### Health & Fitness Goals
+Users can enter:
+- age
+- sex
+- height
+- current weight
+- target weight
+- activity level
+- goal type (lose, maintain, gain)
 
-- **Ingredient Price Fetching**  
-  Pull pricing data from nearby or online stores.
+The system then calculates:
+- BMR
+- maintenance calories
+- target calories
+- protein target
+- carb target
+- fat target
 
-- **Personalized Nutrition Targets**  
-  Body composition + athleticism + health goals → nutrient goals → recipe generation.
+These values are saved and shown on the dashboard.
 
-- **Allergy & Preference Filters**  
-  Exclude meals based on allergies, religion, or personal preferences.
+### Meal Logging
+Users can:
+- search for foods
+- select foods from USDA FoodData Central results
+- enter a portion size in grams
+- log meals by type
+- view their logged meals for the day
+- see daily totals for calories and macros
 
-- **Analytics Dashboard**  
-  Track progress, habits, and nutritional trends.
+### Dashboard
+The dashboard acts as the main page for the user and displays:
+- saved goal information
+- calorie targets
+- macro targets
+- today’s meal summary
+- progress-related nutrition information
 
-- **Community Recipes**  
-  Submit recipes and add others’ recipes to your personal recipe book.
+### Consistent UI
+The app uses a shared visual style across all implemented pages.  
+Current pages include:
+- `/register`
+- `/login`
+- `/dashboard`
+- `/forgot-password`
+- `/reset-password`
+- `/meals`
 
-- **User Accounts**  
-  Log in/out, manage account info, and personalize health data (e.g., heart rate).
+## Planned Features
+
+The full MealPrepperFriend system is designed to include additional features in future sprints, such as:
+
+- AI-based personalized weekly meal plans
+- pantry ingredient input through chatbot/NLP
+- shopping list generation
+- ingredient price lookup
+- recipe favorites
+- calendar integration
+- notifications/reminders
+- allergy and dietary filtering
+- analytics and progress tracking
+
 
 ## 🛠️ Tech Stack
 
-### **Frontend**
-- Vue.js
+### Backend
+- Python 3
+- Flask
 
-### **Backend**
-- Java  
-- Spring Boot
+### Deployment
+- AWS EC2
+- Gunicorn
+- systemd
+
+### Frontend
+- HTML templates
+- shared CSS styling across pages
 
 ### **AI Engine**
 - Python  
@@ -82,6 +150,7 @@ MealPrepperFriend is an AI‑powered meal‑planning and meal‑prepping web app
 - MySQL
 
 ### **Integrations**
+- USDA FoodData Central API
 - Google Calendar / Apple Calendar  
 - Nutrition APIs  
 - Grocery store APIs  
