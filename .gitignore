@@ -1,3 +1,0 @@
-## Ignore node modules and lock files created to run backend and frontend concurrently
-node_modules/
-package-lock.json
