@@ -1,7 +1,8 @@
-// This file contains the SQL schema for the MealPrepperFriend application.
-// Make sure you already have a MySQL database named 'mealprepperfriend' created before running this schema. 
+# This file contains the SQL schema for the MealPrepperFriend application.
+# Make sure you already have a MySQL database named 'mealprepperfriend' created before running this schema. 
 
-CREATE TABLE IF NOT EXISTS users (
+DROP TABLE IF EXISTS users;
+CREATE TABLE users (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     first_name VARCHAR(255) NOT NULL,
     last_name VARCHAR(255) NOT NULL,
