@@ -23,32 +23,29 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
         http
-            // CSRF: enabled, token stored in cookie for SPA
+            .cors() // <-- REQUIRED so Security uses your WebConfig CORS rules
+            .and()
             .csrf(csrf -> csrf.disable())
 
-            // AUTH RULES
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/auth/register", "/auth/login").permitAll()
                 .anyRequest().authenticated()
             )
 
-            // DISABLE FORM LOGIN + BASIC AUTH
             .formLogin(form -> form.disable())
             .httpBasic(basic -> basic.disable())
 
-            // LOGOUT handled by Spring Security at /auth/logout
             .logout(logout -> logout
-            .logoutUrl("/auth/logout")
-            .logoutSuccessHandler((request, response, authentication) -> {
-                response.setStatus(HttpServletResponse.SC_OK);
-                response.setContentType("application/json");
-                response.getWriter().write("{\"message\":\"Logged out\"}");
-            })
-            .invalidateHttpSession(true)
-            .deleteCookies("JSESSIONID")
-        )
+                .logoutUrl("/auth/logout")
+                .logoutSuccessHandler((request, response, authentication) -> {
+                    response.setStatus(HttpServletResponse.SC_OK);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"message\":\"Logged out\"}");
+                })
+                .invalidateHttpSession(true)
+                .deleteCookies("JSESSIONID")
+            )
 
-            // SESSION CREATION
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
             );
@@ -64,12 +61,10 @@ public class SecurityConfig {
     @Bean
     public UserDetailsService userDetailsService(UserRepository userRepository) {
         return email -> {
-            // Fully qualify your entity class to avoid conflict
             com.mealprepperfriend.backend.model.User entityUser =
                     userRepository.findByEmail(email)
                         .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-            // Use Spring Security's User class (imported normally)
             return org.springframework.security.core.userdetails.User
                     .withUsername(entityUser.getEmail())
                     .password(entityUser.getPassword())
@@ -77,6 +72,4 @@ public class SecurityConfig {
                     .build();
         };
     }
-
-
 }
