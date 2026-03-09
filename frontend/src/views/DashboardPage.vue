@@ -9,12 +9,28 @@
 
 <script>
 import axios from "axios";
+import { useAuthStore } from "../store/auth";
 
 export default {
   methods: {
     async logout() {
-      await axios.post("http://localhost:8080/auth/logout", {}, { withCredentials: true });
-      this.$router.push("/");
+      const auth = useAuthStore();
+
+      try {
+        await axios.post(
+          "http://localhost:8080/auth/logout",
+          {},
+          { withCredentials: true }
+        );
+      } catch (err) {
+        // Even if backend fails, still clear local state
+      }
+
+      // Clear Pinia auth state
+      auth.logout();
+
+      // Redirect to homepage
+      this.$router.push({ name: "home" });
     }
   }
 };

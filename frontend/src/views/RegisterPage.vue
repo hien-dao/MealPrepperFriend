@@ -11,12 +11,13 @@
       <button type="submit">Register</button>
     </form>
 
-    <p>{{ message }}</p>
+    <p v-if="message" class="error">{{ message }}</p>
   </div>
 </template>
 
 <script>
 import axios from "axios";
+import { useAuthStore } from "../store/auth";
 
 export default {
   data() {
@@ -30,8 +31,11 @@ export default {
   },
   methods: {
     async register() {
+      this.message = "";
+      const auth = useAuthStore();
+
       try {
-        await axios.post(
+        const response = await axios.post(
           "http://localhost:8080/auth/register",
           {
             firstName: this.firstName,
@@ -42,11 +46,33 @@ export default {
           { withCredentials: true }
         );
 
-        this.$router.push("/login");
+        // Save user in Pinia store
+        auth.setUser(response.data);
+
+        this.$router.push({ name: "dashboard" });
       } catch (err) {
-        this.message = "Registration failed";
+        if (err.response && err.response.data) {
+          const data = err.response.data;
+
+          if (data.errors) {
+            this.message = Object.values(data.errors)[0];
+          } else if (data.message) {
+            this.message = data.message;
+          } else {
+            this.message = "Registration failed";
+          }
+        } else {
+          this.message = "Cannot connect to server";
+        }
       }
     }
   }
 };
 </script>
+
+<style>
+.error {
+  color: red;
+  margin-top: 10px;
+}
+</style>

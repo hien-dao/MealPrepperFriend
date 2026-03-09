@@ -15,6 +15,7 @@
 
 <script>
 import axios from "axios";
+import { useAuthStore } from "../store/auth";
 
 export default {
   data() {
@@ -26,6 +27,8 @@ export default {
   },
   methods: {
     async login() {
+      const auth = useAuthStore();
+
       try {
         const response = await axios.post(
           "http://localhost:8080/auth/login",
@@ -36,7 +39,10 @@ export default {
           { withCredentials: true }
         );
 
-        this.$router.push("/dashboard");
+        // Save user in Pinia store
+        auth.setUser(response.data);
+
+        this.$router.push({ name: "dashboard" });
       } catch (err) {
         this.message = "Login failed";
       }
