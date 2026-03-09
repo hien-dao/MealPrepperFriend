@@ -24,7 +24,7 @@ public class RegisterRequest {
         message = "Password must contain uppercase, lowercase, number, and special character"
     )
     @Pattern(
-        regexp = "^(?!.*([';--])).*$",
+        regexp = "^(?!.*([';]|--)).*$",
         message = "Password contains illegal characters"
     )
     private String password;

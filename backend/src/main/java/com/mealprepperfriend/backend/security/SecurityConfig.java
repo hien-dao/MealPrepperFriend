@@ -10,9 +10,10 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
 import com.mealprepperfriend.backend.repository.UserRepository;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 @Configuration
 @EnableWebSecurity
@@ -23,9 +24,7 @@ public class SecurityConfig {
 
         http
             // CSRF: enabled, token stored in cookie for SPA
-            .csrf(csrf -> csrf
-                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-            )
+            .csrf(csrf -> csrf.disable())
 
             // AUTH RULES
             .authorizeHttpRequests(auth -> auth
@@ -39,11 +38,15 @@ public class SecurityConfig {
 
             // LOGOUT handled by Spring Security at /auth/logout
             .logout(logout -> logout
-                .logoutUrl("/auth/logout")
-                .invalidateHttpSession(true)
-                .deleteCookies("JSESSIONID")
-                .permitAll()
-            )
+            .logoutUrl("/auth/logout")
+            .logoutSuccessHandler((request, response, authentication) -> {
+                response.setStatus(HttpServletResponse.SC_OK);
+                response.setContentType("application/json");
+                response.getWriter().write("{\"message\":\"Logged out\"}");
+            })
+            .invalidateHttpSession(true)
+            .deleteCookies("JSESSIONID")
+        )
 
             // SESSION CREATION
             .sessionManagement(session -> session
