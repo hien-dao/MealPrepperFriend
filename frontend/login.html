@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In – MPF</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --amber: #c4883a;
+      --amber-light: #e8b96a;
+      --amber-dark: #8a5c20;
+      --warm-brown: #3a2810;
+      --cream: #faf6ef;
+      --warm-white: #fffdf8;
+      --bark: #5c4a3a;
+      --bark-light: #8a7060;
+      --sage: #7a9e7e;
+      --text: #2e2318;
+      --text-muted: #8a7a6a;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'DM Sans', sans-serif;
+      color: var(--text);
+    }
+
+    body {
+      min-height: 100vh;
+      background: var(--warm-brown);
+      display: flex;
+      align-items: stretch;
+    }
+
+    /* FULL PAGE LAYOUT - login is centered, more intimate */
+    .page-wrap {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 520px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* LEFT: atmospheric visual background */
+    .visual-side {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 4rem;
+      overflow: hidden;
+    }
+
+    .visual-side::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 60% 40%, rgba(196,136,58,0.15) 0%, transparent 60%),
+        radial-gradient(ellipse at 20% 80%, rgba(122,158,126,0.1) 0%, transparent 50%),
+        linear-gradient(160deg, #3a2810 0%, #1e1508 100%);
+    }
+
+    .circles-deco {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .circle {
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .circle-1 { width: 500px; height: 500px; top: -100px; right: -150px; }
+    .circle-2 { width: 350px; height: 350px; bottom: 50px; left: -80px; border-color: rgba(196,136,58,0.1); }
+    .circle-3 { width: 200px; height: 200px; top: 50%; left: 40%; border-color: rgba(255,255,255,0.04); }
+
+    .visual-content {
+      position: relative;
+      z-index: 2;
+    }
+
+    .brand-mark {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 4rem;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--amber) 0%, var(--amber-dark) 100%);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+    }
+
+    .brand-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.4rem;
+      font-weight: 500;
+      color: #fff;
+      letter-spacing: 0.02em;
+    }
+
+    .welcome-text {
+      font-family: 'Playfair Display', serif;
+      font-size: 3rem;
+      font-weight: 400;
+      line-height: 1.2;
+      color: #fff;
+      margin-bottom: 1.25rem;
+    }
+
+    .welcome-text em {
+      font-style: italic;
+      color: var(--amber-light);
+    }
+
+    .welcome-desc {
+      font-size: 0.95rem;
+      color: rgba(255,255,255,0.45);
+      line-height: 1.75;
+      max-width: 360px;
+    }
+
+    .stat-row {
+      display: flex;
+      gap: 2.5rem;
+      margin-top: 3.5rem;
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-num {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.6rem;
+      color: var(--amber-light);
+      font-weight: 400;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.35);
+      margin-top: 0.15rem;
+      letter-spacing: 0.04em;
+    }
+
+    /* RIGHT: login card */
+    .form-side {
+      background: var(--warm-white);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 3.5rem;
+      position: relative;
+    }
+
+    /* Warm top accent line */
+    .form-side::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--amber-dark), var(--amber), var(--amber-light));
+    }
+
+    .form-container {
+      width: 100%;
+      max-width: 360px;
+      animation: slideIn 0.5s ease both;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(16px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    .form-header {
+      margin-bottom: 2.5rem;
+    }
+
+    .greeting {
+      font-size: 0.8rem;
+      color: var(--amber);
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .form-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 2rem;
+      font-weight: 500;
+      line-height: 1.2;
+      color: var(--text);
+    }
+
+    .form-subtitle {
+      margin-top: 0.5rem;
+      font-size: 0.88rem;
+      color: var(--text-muted);
+    }
+
+    .field-group {
+      margin-bottom: 1.3rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--bark);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 0.45rem;
+    }
+
+    input[type="email"],
+    input[type="password"] {
+      width: 100%;
+      padding: 0.85rem 1.1rem;
+      background: #fff;
+      border: 1.5px solid #e8dfd4;
+      border-radius: 10px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.95rem;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input[type="email"]:focus,
+    input[type="password"]:focus {
+      border-color: var(--amber);
+      box-shadow: 0 0 0 3px rgba(196,136,58,0.12);
+    }
+
+    input::placeholder {
+      color: #c8bfb5;
+    }
+
+    .forgot-row {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 0.4rem;
+    }
+
+    .forgot-link {
+      font-size: 0.78rem;
+      color: var(--bark-light);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .forgot-link:hover {
+      color: var(--amber);
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 0.95rem;
+      margin-top: 1.2rem;
+      background: linear-gradient(135deg, var(--warm-brown) 0%, var(--bark) 100%);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.2s;
+      position: relative;
+    }
+
+    .submit-btn::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.08), transparent);
+      border-radius: inherit;
+    }
+
+    .submit-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(58,40,16,0.3);
+    }
+
+    .submit-btn:active { transform: translateY(0); }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin: 1.8rem 0;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #e8dfd4;
+    }
+
+    .register-link {
+      text-align: center;
+      font-size: 0.88rem;
+      color: var(--text-muted);
+    }
+
+    .register-link a {
+      color: var(--amber-dark);
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .register-link a:hover {
+      color: var(--amber);
+      text-decoration: underline;
+    }
+
+    @media (max-width: 900px) {
+      .page-wrap { grid-template-columns: 1fr; }
+      .visual-side { display: none; }
+      .form-side { padding: 3rem 2rem; }
+    }
+  </style>
+</head>
+<body>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div style="margin-bottom: 20px;">
+      {% for category, message in messages %}
+        <div
+          style="
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            font-weight: 500;
+            {% if category == 'success' %}
+              background-color: #e8f7ec;
+              color: #1e7e34;
+              border: 1px solid #b7ebc6;
+            {% elif category == 'error' %}
+              background-color: #fdeaea;
+              color: #b02a37;
+              border: 1px solid #f5c2c7;
+            {% else %}
+              background-color: #f4f4f4;
+              color: #333;
+              border: 1px solid #ddd;
+            {% endif %}
+          "
+        >
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+  <div class="page-wrap">
+
+    <!-- ATMOSPHERIC LEFT PANEL -->
+    <div class="visual-side">
+      <div class="circles-deco">
+        <div class="circle circle-1"></div>
+        <div class="circle circle-2"></div>
+        <div class="circle circle-3"></div>
+      </div>
+
+      <div class="visual-content">
+        <div class="brand-mark">
+          <div class="brand-icon">🌿</div>
+          <div class="brand-name">MPF</div>
+        </div>
+
+        <h2 class="welcome-text">Good to have<br>you <em>back.</em></h2>
+        <p class="welcome-desc">Your goals, your progress, your meals — all right where you left them.</p>
+
+        <div class="stat-row">
+          <div class="stat">
+            <span class="stat-num">142</span>
+            <span class="stat-label">Days tracked</span>
+          </div>
+          <div class="stat">
+            <span class="stat-num">98%</span>
+            <span class="stat-label">Goal accuracy</span>
+          </div>
+          <div class="stat">
+            <span class="stat-num">21</span>
+            <span class="stat-label">Day streak</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <div class="form-side">
+      <div class="form-container">
+        <div class="form-header">
+          <div class="greeting">Welcome back</div>
+          <h1 class="form-title">Sign in to<br>your account</h1>
+          <p class="form-subtitle">Pick up right where you left off.</p>
+        </div>
+
+        <form method="POST" action="/login">
+		<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="field-group">
+            <label for="email">Email address</label>
+            <input type="email" id="email" name="email" placeholder="you@example.com" required>
+          </div>
+
+          <div class="field-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" placeholder="Your password" required>
+            <div class="forgot-row">
+              <a href="/forgot-password" class="forgot-link">Forgot password?</a>
+            </div>
+          </div>
+
+          <button type="submit" class="submit-btn">Sign in →</button>
+        </form>
+
+        <div class="divider">new here?</div>
+
+        <div class="register-link">
+          <a href="/register">Create a free account</a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>
