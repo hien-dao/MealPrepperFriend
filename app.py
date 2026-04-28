@@ -11,8 +11,14 @@ import mysql.connector
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from itsdangerous import URLSafeTimedSerializer
+from openai import OpenAI
+import json
+import re
+
 
 app = Flask(__name__)
+from forum import forum_bp
+app.register_blueprint(forum_bp)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret")
 
 def get_db():
@@ -35,14 +41,30 @@ def generate_csrf_token():
     return session["csrf_token"]
 
 @app.context_processor
+def inject_user_flags():
+    is_premium = False
+    if "user_id" in session:
+        db  = get_db()
+        cur = db.cursor(dictionary=True)
+        cur.execute("SELECT is_premium FROM users WHERE id=%s", (session["user_id"],))
+        row = cur.fetchone()
+        cur.close()
+        db.close()
+        is_premium = bool(row["is_premium"]) if row else False
+    return {"is_premium": is_premium}
 def inject_csrf_token():
     return {"csrf_token": generate_csrf_token()}
 
 def validate_csrf():
-    form_token = request.form.get("csrf_token")
+	return True
+'''
+    if request.is_json:
+        form_token = (request.get_json(silent=True) or {}).get("csrf_token")
+    else:
+        form_token = request.form.get("csrf_token")
     session_token = session.get("csrf_token")
     return form_token and session_token and form_token == session_token
-
+'''
 def print_link(label, link):
     print(f"\n=== {label} ===")
     print(link)
@@ -343,148 +365,12 @@ def reset_password():
 
 # ---------------------------------------------------------------------------
 # FR-10: Health & Fitness Goals
-# ---------------------------------------------------------------------------
-
-ACTIVITY_MULTIPLIERS = {
-    "sedentary":        1.2,
-    "lightly_active":   1.375,
-    "moderately_active": 1.55,
-    "very_active":      1.725,
-    "extra_active":     1.9,
-}
-
-VALID_ACTIVITY_LEVELS = set(ACTIVITY_MULTIPLIERS.keys())
-VALID_GOAL_TYPES      = {"lose", "maintain", "gain"}
-VALID_SEXES           = {"male", "female"}
-
-# Minimum safe calorie floors
-MIN_CALORIES = {"male": 1500, "female": 1200}
+# -------------------------------------------------------------------------
 
 
-def compute_goals(age, sex, height_cm, weight_kg, activity_level, goal_type):
-    """
-    Mifflin-St Jeor BMR → maintenance → target calories → macros.
-    Returns a dict of all computed values.
-    """
-    # BMR
-    if sex == "male":
-        bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age + 5
-    else:
-        bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age - 161
+from goals import goals_bp, get_weekly_calories, get_streak, get_weekly_stats, get_recent_days
+app.register_blueprint(goals_bp)
 
-    maintenance = bmr * ACTIVITY_MULTIPLIERS[activity_level]
-
-    # Target calories before floor check
-    if goal_type == "lose":
-        target = maintenance - 500
-    elif goal_type == "gain":
-        target = maintenance + 300
-    else:
-        target = maintenance
-
-    # Enforce calorie floor — clamp silently; UI shows actual value
-    floor = MIN_CALORIES[sex]
-    target = max(target, floor)
-
-    # Macros based on current weight
-    # Protein and fat first (gram targets), then carbs fill remaining calories.
-    protein_g = round(1.8 * weight_kg, 1)
-    fat_g     = round(0.8 * weight_kg, 1)
-
-    protein_cals = protein_g * 4
-    fat_cals     = fat_g * 9
-    remaining    = target - protein_cals - fat_cals
-
-    # If calories are so low that fat+protein already exceed budget, clamp carbs to 0
-    # and reduce fat proportionally to fit within target.
-    if remaining < 0:
-        carbs_g = 0
-        # Distribute remaining budget between protein and fat at ~1:1 calorie ratio
-        # Keep protein priority; reduce fat.
-        fat_cals = max(0, target - protein_cals)
-        fat_g    = round(fat_cals / 9, 1)
-    else:
-        carbs_g = round(remaining / 4, 1)
-
-    return {
-        "bmr":                  round(bmr, 2),
-        "maintenance_calories": round(maintenance, 2),
-        "target_calories":      round(target, 2),
-        "protein_g":            protein_g,
-        "carbs_g":              carbs_g,
-        "fat_g":                fat_g,
-    }
-
-
-def validate_goals_form(form):
-    """
-    Validates raw form input. Returns (cleaned_data dict, error_message or None).
-    """
-    errors = []
-
-    # --- age ---
-    try:
-        age = int(form.get("age", ""))
-        if not (10 <= age <= 120):
-            errors.append("Age must be between 10 and 120.")
-    except ValueError:
-        errors.append("Age must be a whole number.")
-        age = None
-
-    # --- sex ---
-    sex = form.get("sex", "").strip().lower()
-    if sex not in VALID_SEXES:
-        errors.append("Sex must be male or female.")
-
-    # --- height ---
-    try:
-        height_cm = float(form.get("height_cm", ""))
-        if not (50 <= height_cm <= 300):
-            errors.append("Height must be between 50 and 300 cm.")
-    except ValueError:
-        errors.append("Height must be a number.")
-        height_cm = None
-
-    # --- current weight ---
-    try:
-        current_weight_kg = float(form.get("current_weight_kg", ""))
-        if not (20 <= current_weight_kg <= 500):
-            errors.append("Current weight must be between 20 and 500 kg.")
-    except ValueError:
-        errors.append("Current weight must be a number.")
-        current_weight_kg = None
-
-    # --- activity level ---
-    activity_level = form.get("activity_level", "").strip()
-    if activity_level not in VALID_ACTIVITY_LEVELS:
-        errors.append("Invalid activity level.")
-
-    # --- goal type ---
-    goal_type = form.get("goal_type", "").strip()
-    if goal_type not in VALID_GOAL_TYPES:
-        errors.append("Invalid goal type.")
-
-    # --- target weight ---
-    try:
-        target_weight_kg = float(form.get("target_weight_kg", ""))
-        if not (20 <= target_weight_kg <= 500):
-            errors.append("Target weight must be between 20 and 500 kg.")
-    except ValueError:
-        errors.append("Target weight must be a number.")
-        target_weight_kg = None
-
-    if errors:
-        return None, " ".join(errors)
-
-    return {
-        "age":               age,
-        "sex":               sex,
-        "height_cm":         height_cm,
-        "current_weight_kg": current_weight_kg,
-        "activity_level":    activity_level,
-        "goal_type":         goal_type,
-        "target_weight_kg":  target_weight_kg,
-    }, None
 
 
 @app.route("/dashboard")
@@ -499,87 +385,24 @@ def dashboard():
     cur.close()
     db.close()
 
-    meals  = get_today_meals(session["user_id"])
-    totals = get_daily_totals(meals)
+    meals        = get_today_meals(session["user_id"])
+    totals       = get_daily_totals(meals)
+    weekly_cals  = get_weekly_calories(session["user_id"])
+    streak       = get_streak(session["user_id"])
+    weekly_stats = get_weekly_stats(session["user_id"])
+    recent_days  = get_recent_days(session["user_id"])
+    recipes      = get_random_recipes(3)
 
     return render_template("dashboard.html",
                            email=session["email"],
                            goals=goals,
                            meals=meals,
-                           totals=totals)
-
-
-@app.route("/goals", methods=["POST"])
-def save_goals():
-    if "user_id" not in session:
-        return redirect(url_for("login_page"))
-
-    if not validate_csrf():
-        return "CSRF validation failed", 403
-
-    data, error = validate_goals_form(request.form)
-    if error:
-        flash(error, "error")
-        return redirect(url_for("dashboard"))
-
-    computed = compute_goals(
-        age            = data["age"],
-        sex            = data["sex"],
-        height_cm      = data["height_cm"],
-        weight_kg      = data["current_weight_kg"],
-        activity_level = data["activity_level"],
-        goal_type      = data["goal_type"],
-    )
-
-    db = get_db()
-    cur = db.cursor()
-
-    # Upsert: insert or update the single row for this user
-    cur.execute("""
-        INSERT INTO user_goals
-            (user_id, age, sex, height_cm, current_weight_kg, activity_level,
-             goal_type, target_weight_kg, bmr, maintenance_calories,
-             target_calories, protein_g, carbs_g, fat_g)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE
-            age                  = VALUES(age),
-            sex                  = VALUES(sex),
-            height_cm            = VALUES(height_cm),
-            current_weight_kg    = VALUES(current_weight_kg),
-            activity_level       = VALUES(activity_level),
-            goal_type            = VALUES(goal_type),
-            target_weight_kg     = VALUES(target_weight_kg),
-            bmr                  = VALUES(bmr),
-            maintenance_calories = VALUES(maintenance_calories),
-            target_calories      = VALUES(target_calories),
-            protein_g            = VALUES(protein_g),
-            carbs_g              = VALUES(carbs_g),
-            fat_g                = VALUES(fat_g),
-            updated_at           = CURRENT_TIMESTAMP
-    """, (
-        session["user_id"],
-        data["age"],
-        data["sex"],
-        data["height_cm"],
-        data["current_weight_kg"],
-        data["activity_level"],
-        data["goal_type"],
-        data["target_weight_kg"],
-        computed["bmr"],
-        computed["maintenance_calories"],
-        computed["target_calories"],
-        computed["protein_g"],
-        computed["carbs_g"],
-        computed["fat_g"],
-    ))
-
-    db.commit()
-    cur.close()
-    db.close()
-
-    flash("Goals saved successfully.", "success")
-    return redirect(url_for("dashboard"))
-
+                           totals=totals,
+                           weekly_cals=weekly_cals,
+                           streak=streak,
+                           weekly_stats=weekly_stats,
+                           recent_days=recent_days,
+                           recipes=recipes)
 
 # ---------------------------------------------------------------------------
 # FR-11: Meal Logging — USDA FoodData Central integration
@@ -867,6 +690,676 @@ def meals_page():
                            totals=totals,
                            goals=goals)
 
+
+
+# ---------------------------------------------------------------------------
+# Chatbot — GPT-4o nutrition assistant
+# ---------------------------------------------------------------------------
+
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+
+SYSTEM_PROMPT = """You are Nouri, a friendly and knowledgeable nutrition assistant built into the Nourish app.
+
+You help users with three things:
+1. Answer nutrition and food questions clearly and accurately.
+2. Log meals conversationally. When a user says something like "I just ate 200g of chicken breast for lunch", extract the food, quantity in grams, and meal type, then log it.
+3. Suggest recipes based on ingredients the user has on hand.
+
+You will be given the user's fitness goals and today's meal log as context. Use this to give personalised answers — for example, tell them how many calories they have left for the day, whether a meal fits their macros, etc.
+
+RULES FOR LOGGING MEALS:
+- When the user clearly wants to log a meal, include this exact tag in your response:
+  <action>{"type": "log_meal", "food_query": "chicken breast", "portion_g": 200, "meal_type": "lunch"}</action>
+- meal_type must be one of: breakfast, lunch, dinner, snack
+- If portion is not given in grams, make a reasonable estimate and state what you assumed.
+- If meal_type is unclear, infer from context (e.g. morning → breakfast) or ask.
+- Always confirm what was logged in plain language after the action tag.
+- Only include the action tag when the user is clearly asking to log something.
+
+RULES FOR RECIPE SUGGESTIONS:
+- When a user lists ingredients they have, suggest 2–3 practical recipes using mostly those ingredients.
+- Keep recipes simple and include rough calorie estimates if possible.
+- Format recipe suggestions clearly with a name, key ingredients, and brief method.
+
+GENERAL RULES:
+- Keep responses concise and friendly. Use short paragraphs.
+- Do not invent specific nutrition numbers — give ranges or general guidance if unsure.
+- Always relate advice back to the user's goals and remaining daily targets where relevant."""
+
+
+def get_user_context(user_id):
+    """
+    Fetch the user's saved goals and today's meals,
+    and format them as a context string for the system prompt.
+    """
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+
+    cur.execute("SELECT * FROM user_goals WHERE user_id = %s", (user_id,))
+    goals = cur.fetchone()
+
+    today = datetime.utcnow().date()
+    cur.execute("""
+        SELECT food_name, meal_type, portion_g, calories, protein_g, carbs_g, fat_g
+        FROM meal_logs
+        WHERE user_id = %s AND log_date = %s
+        ORDER BY logged_at ASC
+    """, (user_id, today))
+    meals = cur.fetchall()
+
+    cur.close()
+    db.close()
+
+    ctx = "\n\n--- USER CONTEXT ---"
+
+    if goals:
+        ctx += f"""
+User profile:
+- Age: {goals['age']}, Sex: {goals['sex']}
+- Height: {goals['height_cm']} cm, Current weight: {goals['current_weight_kg']} kg
+- Goal: {goals['goal_type']} weight (target: {goals['target_weight_kg']} kg)
+- Activity level: {goals['activity_level']}
+- Daily targets: {int(goals['target_calories'])} kcal | {goals['protein_g']}g protein | {goals['carbs_g']}g carbs | {goals['fat_g']}g fat"""
+    else:
+        ctx += "\nUser has not set fitness goals yet."
+
+    if meals:
+        totals = get_daily_totals(meals)
+        ctx += f"\n\nToday's meals ({today}):"
+        for m in meals:
+            ctx += f"\n- {m['meal_type'].capitalize()}: {m['food_name']} ({int(m['portion_g'])}g, {int(m['calories'])} kcal)"
+        ctx += f"\nToday's totals: {int(totals['calories'])} kcal | {totals['protein_g']}g protein | {totals['carbs_g']}g carbs | {totals['fat_g']}g fat"
+        if goals:
+            remaining = int(goals['target_calories']) - int(totals['calories'])
+            ctx += f"\nRemaining today: {remaining} kcal"
+    else:
+        ctx += f"\n\nNo meals logged today ({today}) yet."
+
+    ctx += "\n--- END USER CONTEXT ---"
+    return ctx
+
+
+def get_chat_history(user_id, limit=20):
+    """Fetch recent conversation history in OpenAI message format."""
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+    cur.execute("""
+        SELECT role, content FROM chat_messages
+        WHERE user_id = %s
+        ORDER BY created_at DESC
+        LIMIT %s
+    """, (user_id, limit))
+    rows = cur.fetchall()
+    cur.close()
+    db.close()
+    return list(reversed(rows))  # chronological order
+
+
+def save_message(user_id, role, content):
+    """Persist a single message to chat_messages."""
+    db = get_db()
+    cur = db.cursor()
+    cur.execute(
+        "INSERT INTO chat_messages (user_id, role, content) VALUES (%s, %s, %s)",
+        (user_id, role, content)
+    )
+    db.commit()
+    cur.close()
+    db.close()
+
+
+def parse_action(response_text):
+    """
+    Extract <action>{...}</action> from the model's response.
+    Returns (clean_text_without_tag, action_dict or None).
+    """
+    match = re.search(r'<action>(.*?)</action>', response_text, re.DOTALL)
+    if not match:
+        return response_text, None
+    try:
+        action = json.loads(match.group(1).strip())
+    except json.JSONDecodeError:
+        return response_text, None
+    clean = re.sub(r'<action>.*?</action>', '', response_text, flags=re.DOTALL).strip()
+    return clean, action
+
+
+def execute_action(action, user_id):
+    """
+    Execute a structured action parsed from the model response.
+    Currently supports: log_meal
+    """
+    if action.get('type') != 'log_meal':
+        return
+
+    food_query = action.get('food_query', '')
+    portion_g  = float(action.get('portion_g', 100))
+    meal_type  = action.get('meal_type', 'snack')
+
+    if meal_type not in VALID_MEAL_TYPES:
+        meal_type = 'snack'
+
+    # Search USDA for the food
+    foods = usda_search(food_query, page_size=1)
+    if not foods:
+        app.logger.warning(f"Chat meal log: no USDA result for '{food_query}'")
+        return
+
+    food = foods[0]
+
+    # Fetch full per-100g detail
+    try:
+        resp = requests.get(
+            USDA_FOOD_URL.format(fdc_id=food['fdc_id']),
+            params={"api_key": USDA_API_KEY},
+            timeout=6
+        )
+        full = resp.json()
+        nutrients = {}
+        for n in full.get("foodNutrients", []):
+            nid = n.get("nutrient", {}).get("id")
+            if nid:
+                nutrients[int(nid)] = n.get("amount", 0) or 0
+        per100 = {
+            "calories":  nutrients.get(USDA_NUTRIENT_IDS["calories"], food["calories"]),
+            "protein_g": nutrients.get(USDA_NUTRIENT_IDS["protein"],  food["protein_g"]),
+            "carbs_g":   nutrients.get(USDA_NUTRIENT_IDS["carbs"],    food["carbs_g"]),
+            "fat_g":     nutrients.get(USDA_NUTRIENT_IDS["fat"],      food["fat_g"]),
+        }
+    except Exception:
+        per100 = {k: food[k] for k in ["calories", "protein_g", "carbs_g", "fat_g"]}
+
+    scaled = scale_nutrients(per100, portion_g)
+    today  = datetime.utcnow().date()
+
+    db = get_db()
+    cur = db.cursor()
+    cur.execute("""
+        INSERT INTO meal_logs
+            (user_id, fdc_id, food_name, meal_type, portion_g,
+             calories, protein_g, carbs_g, fat_g, log_date)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """, (
+        user_id, food["fdc_id"], food["name"], meal_type,
+        portion_g, scaled["calories"], scaled["protein_g"],
+        scaled["carbs_g"], scaled["fat_g"], today,
+    ))
+    db.commit()
+    cur.close()
+    db.close()
+
+
+
+def is_user_premium(user_id):
+    db  = get_db()
+    cur = db.cursor(dictionary=True)
+    cur.execute("SELECT is_premium FROM users WHERE id=%s", (user_id,))
+    row = cur.fetchone()
+    cur.close()
+    db.close()
+    return bool(row["is_premium"]) if row else False
+
+# ── Routes ───────────────────────────────────────────────────────────────
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    if "user_id" not in session:
+        return {"error": "Unauthorized"}, 401
+
+    if not validate_csrf():
+        return {"error": "CSRF validation failed"}, 403
+
+    data         = request.get_json(silent=True) or {}
+    user_message = data.get("message", "").strip()
+    page_context = data.get("page_context", "").strip() if data.get("page_context") else ""
+
+    if not user_message or len(user_message) > 2000:
+        return {"error": "Invalid message"}, 400
+
+    user_id = session["user_id"]
+
+    # ── Rate limit for free users ──────────────────────────────────────
+    if not is_user_premium(user_id):
+        db  = get_db()
+        cur = db.cursor(dictionary=True)
+        cur.execute("""
+            SELECT COUNT(*) AS cnt FROM chat_messages
+            WHERE user_id = %s
+              AND role = 'user'
+              AND created_at >= DATE_SUB(NOW(), INTERVAL 3 HOUR)
+        """, (user_id,))
+        count = cur.fetchone()["cnt"]
+        cur.close()
+        db.close()
+
+        if count >= 10:
+            return {
+                "error": "rate_limited",
+                "message": "You've used your 10 free messages for this 3-hour window. Upgrade to Pro for unlimited access."
+            }, 429
+    if "user_id" not in session:
+        return {"error": "Unauthorized"}, 401
+    if not validate_csrf():
+        return {"error": "CSRF validation failed"}, 403
+
+    data         = request.get_json(silent=True) or {}
+    user_message = data.get("message", "").strip()
+    page_context = data.get("page_context", "").strip() if data.get("page_context") else ""
+
+    if not user_message or len(user_message) > 2000:
+        return {"error": "Invalid message"}, 400
+
+    user_id = session["user_id"]
+    save_message(user_id, "user", user_message)
+
+    history = get_chat_history(user_id, limit=18)
+    system  = SYSTEM_PROMPT + get_user_context(user_id)
+
+    if page_context:
+        system += f"\n\n--- CURRENT PAGE CONTEXT ---\n{page_context}\n--- END PAGE CONTEXT ---"
+
+    try:
+        client   = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            max_tokens=1024,
+            messages=[
+        {"role": "system", "content": system},
+        *[{"role": m["role"], "content": m["content"]} for m in history],
+    ]
+        )
+        raw_reply = response.choices[0].message.content
+    except Exception as e:
+        app.logger.error(f"OpenAI error: {e}")
+        return {"error": "AI service unavailable"}, 503
+
+    clean_reply, action = parse_action(raw_reply)
+    if action:
+        execute_action(action, user_id)
+
+    save_message(user_id, "assistant", clean_reply)
+    return {"reply": clean_reply}
+       
+
+
+@app.route("/chat/history")
+def chat_history():
+    if "user_id" not in session:
+        return {"error": "Unauthorized"}, 401
+    history = get_chat_history(session["user_id"], limit=20)
+    return {"messages": history}
+@app.route("/pricing")
+def pricing_page():
+    if "user_id" not in session:
+        return redirect(url_for("login_page"))
+    return render_template("pricing.html", email=session["email"])
+
+@app.route("/chat/clear", methods=["POST"])
+def chat_clear():
+    if "user_id" not in session:
+        return {"error": "Unauthorized"}, 401
+    if not validate_csrf():
+        return {"error": "CSRF"}, 403
+    db = get_db()
+    cur = db.cursor()
+    cur.execute("DELETE FROM chat_messages WHERE user_id = %s", (session["user_id"],))
+    db.commit()
+    cur.close()
+    db.close()
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Kroger API — product price lookup with token caching + fallback
+# ---------------------------------------------------------------------------
+
+KROGER_CLIENT_ID     = os.environ.get("KROGER_CLIENT_ID", "")
+KROGER_CLIENT_SECRET = os.environ.get("KROGER_CLIENT_SECRET", "")
+KROGER_TOKEN_URL     = "https://api.kroger.com/v1/connect/oauth2/token"
+KROGER_PRODUCTS_URL  = "https://api.kroger.com/v1/products"
+
+# In-memory token cache — avoids re-fetching on every request
+_kroger_token_cache = {"token": None, "expires_at": 0}
+
+
+def kroger_get_token():
+    """
+    Fetch a client_credentials token from Kroger.
+    Caches in memory and reuses until 60s before expiry.
+    """
+    import time, base64
+    now = time.time()
+    if _kroger_token_cache["token"] and now < _kroger_token_cache["expires_at"]:
+        return _kroger_token_cache["token"]
+
+    credentials = base64.b64encode(
+        f"{KROGER_CLIENT_ID}:{KROGER_CLIENT_SECRET}".encode()
+    ).decode()
+
+    try:
+        resp = requests.post(KROGER_TOKEN_URL, headers={
+            "Authorization": f"Basic {credentials}",
+            "Content-Type":  "application/x-www-form-urlencoded",
+        }, data={"grant_type": "client_credentials", "scope": "product.compact"},
+        timeout=8)
+        resp.raise_for_status()
+        data = resp.json()
+        _kroger_token_cache["token"]      = data["access_token"]
+        _kroger_token_cache["expires_at"] = now + data.get("expires_in", 1800) - 60
+        return data["access_token"]
+    except Exception as e:
+        app.logger.error(f"Kroger token error: {e}")
+        return None
+
+
+def kroger_get_price(ingredient_name):
+    """
+    Look up an ingredient on Kroger and return the best price found.
+    Returns float price or None if not found / API unavailable.
+    """
+    token = kroger_get_token()
+    if not token:
+        return None
+
+    try:
+        resp = requests.get(KROGER_PRODUCTS_URL, headers={
+            "Authorization": f"Bearer {token}",
+            "Accept":        "application/json",
+        }, params={
+            "filter.term":       ingredient_name,
+            "filter.limit":      5,
+            "filter.fulfillment": "ais",  # available in store
+        }, timeout=6)
+        resp.raise_for_status()
+        products = resp.json().get("data", [])
+
+        # Find the first product that has a price
+        for product in products:
+            items = product.get("items", [])
+            for item in items:
+                price_info = item.get("price", {})
+                regular    = price_info.get("regular")
+                promo      = price_info.get("promo")
+                price      = promo if promo and promo > 0 else regular
+                if price and price > 0:
+                    return round(float(price), 2)
+    except Exception as e:
+        app.logger.warning(f"Kroger price lookup failed for '{ingredient_name}': {e}")
+
+    return None
+
+
+def enrich_with_kroger_prices(ingredients):
+    """
+    Try Kroger price for each ingredient.
+    Falls back to est_cost_usd if Kroger lookup fails.
+    Adds 'kroger_price' and 'price_source' keys to each ingredient dict.
+    """
+    enriched = []
+    for item in ingredients:
+        kroger_price = kroger_get_price(item["name"])
+        if kroger_price is not None:
+            item = {**item,
+                    "price_usd":    kroger_price,
+                    "price_source": "Kroger",
+                    "price_note":   f"Kroger: ${kroger_price:.2f}"}
+        else:
+            # Keep whatever estimate was already on the item
+            item = {**item,
+                    "price_source": "estimate",
+                    "price_note":   item.get("price_note", f"~${item.get('price_usd', 0):.2f} est.")}
+        enriched.append(item)
+    return enriched
+
+
+# ---------------------------------------------------------------------------
+# Dashboard recipe cards
+# ---------------------------------------------------------------------------
+
+def get_random_recipes(n=3):
+    """Pick n random recipes from the DB for the dashboard."""
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+    cur.execute("""
+        SELECT id, name, category, health_rating, health_notes,
+               est_cost_usd, ingredients
+        FROM recipes
+        ORDER BY RAND()
+        LIMIT %s
+    """, (n,))
+    rows = cur.fetchall()
+    cur.close()
+    db.close()
+    for r in rows:
+        if isinstance(r["ingredients"], str):
+            r["ingredients"] = json.loads(r["ingredients"])
+    return rows
+
+
+# ---------------------------------------------------------------------------
+
+# Meal Planner — ingredient + price estimator (FR-07 / FR-08)
+
+# ---------------------------------------------------------------------------
+
+@app.route("/planner")
+
+def planner_page():
+
+    if "user_id" not in session:
+
+        return redirect(url_for("login_page"))
+
+    db = get_db()
+
+    cur = db.cursor(dictionary=True)
+
+    cur.execute("""
+
+        SELECT id, dish_name, ingredients, created_at
+
+        FROM meal_plans
+
+        WHERE user_id = %s
+
+        ORDER BY created_at DESC
+
+        LIMIT 5
+
+    """, (session["user_id"],))
+
+    history = cur.fetchall()
+
+    cur.close()
+
+    db.close()
+
+    # Parse JSON ingredients for each history item
+
+    for h in history:
+
+        if isinstance(h["ingredients"], str):
+
+            h["ingredients"] = json.loads(h["ingredients"])
+
+    return render_template("planner.html",
+
+                           email=session["email"],
+
+                           history=history)
+
+@app.route("/planner/ingredients", methods=["POST"])
+
+def planner_ingredients():
+
+    """
+
+    Takes a dish description, returns a structured ingredient list
+
+    with quantity, unit, and estimated price via OpenAI.
+
+    """
+
+    if "user_id" not in session:
+
+        return {"error": "Unauthorized"}, 401
+
+    if not validate_csrf():
+
+        return {"error": "CSRF"}, 403
+
+    data = request.get_json(silent=True) or {}
+
+    dish = data.get("dish", "").strip()
+
+    if not dish or len(dish) > 300:
+
+        return {"error": "Invalid input"}, 400
+
+    prompt = f"""The user wants to make: "{dish}"
+
+Return a JSON array of ingredients needed. Each item must have:
+
+- "name": ingredient name (string)
+
+- "quantity": numeric amount (number)
+
+- "unit": unit of measurement like "g", "ml", "tbsp", "pcs", "cup" (string)
+
+- "price_usd": realistic estimated US grocery store price in USD for that quantity (number, 2 decimal places)
+
+- "price_note": brief note explaining the estimate e.g. "~$2.50 for a 500g pack" (string)
+
+Rules:
+
+- Be practical — use realistic supermarket quantities and prices (Walmart/Kroger level)
+
+- Include ALL ingredients including basics like salt, oil, butter
+
+- Return ONLY the raw JSON array, no markdown, no explanation, no code fences
+
+- Aim for 6–14 ingredients depending on the dish
+
+- Prices should reflect buying the smallest practical package size
+
+Example format:
+
+[{{"name":"spaghetti","quantity":200,"unit":"g","price_usd":1.50,"price_note":"~$1.50 for 500g pack"}},...]"""
+
+    try:
+
+        client   = OpenAI(api_key=OPENAI_API_KEY)
+
+        response = client.chat.completions.create(
+
+            model="gpt-4o",
+
+            max_tokens=1200,
+
+            temperature=0.3,
+
+            messages=[
+
+                {"role": "system", "content": "You are a helpful cooking assistant. Return only valid JSON arrays, nothing else."},
+
+                {"role": "user",   "content": prompt}
+
+            ]
+
+        )
+
+        raw = response.choices[0].message.content.strip()
+
+        # Strip markdown fences if model includes them despite instructions
+
+        raw = re.sub(r'^```[a-z]*\n?', '', raw)
+
+        raw = re.sub(r'\n?```$', '', raw)
+
+        ingredients = json.loads(raw)
+
+        # Validate structure
+
+        for item in ingredients:
+
+            if not all(k in item for k in ["name", "quantity", "unit", "price_usd"]):
+
+                raise ValueError("Missing fields")
+
+    except (json.JSONDecodeError, ValueError) as e:
+
+        app.logger.error(f"Planner parse error: {e} — raw: {raw[:200]}")
+
+        return {"error": "Could not parse ingredient list. Please try again."}, 500
+
+    except Exception as e:
+
+        app.logger.error(f"Planner OpenAI error: {e}")
+
+        return {"error": "AI service unavailable."}, 503
+
+   # Enrich with Kroger prices (falls back to OpenAI estimates)
+
+    ingredients = enrich_with_kroger_prices(ingredients)
+
+    # Save to history with enriched prices
+
+    db = get_db()
+
+    cur = db.cursor()
+
+    cur.execute("""
+
+        INSERT INTO meal_plans (user_id, dish_name, ingredients)
+
+        VALUES (%s, %s, %s)
+
+    """, (session["user_id"], dish, json.dumps(ingredients)))
+
+    db.commit()
+
+    cur.close()
+
+    db.close()
+
+    return {"dish": dish, "ingredients": ingredients}
+
+from water import water_bp
+app.register_blueprint(water_bp)
+from workout import workout_bp
+app.register_blueprint(workout_bp)
+from planner import planner_bp
+app.register_blueprint(planner_bp)
+
+@app.route("/toggle-premium", methods=["POST"])
+def toggle_premium():
+    if "user_id" not in session:
+        return redirect(url_for("login_page"))
+    if not validate_csrf():
+        return "CSRF failed", 403
+
+    db  = get_db()
+    cur = db.cursor(dictionary=True)
+    cur.execute("SELECT is_premium FROM users WHERE id=%s", (session["user_id"],))
+    row = cur.fetchone()
+    new_val = not bool(row["is_premium"])
+    cur2 = db.cursor()
+    cur2.execute("UPDATE users SET is_premium=%s WHERE id=%s",
+                 (new_val, session["user_id"]))
+    db.commit()
+    cur.close()
+    cur2.close()
+    db.close()
+
+    session["is_premium"] = new_val
+    flash(f"Account set to {'Premium ✦' if new_val else 'Free'}.", "success")
+    return redirect(request.referrer or url_for("dashboard"))
+
+
+from notifications import notif_bp
+app.register_blueprint(notif_bp)
+from calendar_bp import calendar_bp
+app.register_blueprint(calendar_bp)
 
 
 if __name__ == "__main__":
